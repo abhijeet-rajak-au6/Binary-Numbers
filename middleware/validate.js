@@ -26,22 +26,16 @@ module.exports = {
             .withMessage("please provide password")
             .isLength({ min: 8, max: 20 })
             .withMessage("Length of password should be between 8 to 20"),
-
-          check("account_no")
+          check("role")
             .trim()
             .not()
             .isEmpty()
-            .withMessage("please provide account no")
-            .isLength({ min: 12, max: 12 })
-            .withMessage("Account no should be 12 digit long"),
+            .withMessage("please assign a role to a user")
+            .isIn(["customer", "banker"])
+            .withMessage("role should be either banker | customer"),
         ];
       case "USER_LOGIN":
         return [
-          check("account_no")
-            .trim()
-            .not()
-            .isEmpty()
-            .withMessage("please provide account_no"),
           check("password")
             .not()
             .isEmpty()

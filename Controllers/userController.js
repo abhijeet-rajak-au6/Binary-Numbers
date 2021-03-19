@@ -8,12 +8,12 @@ const hashPassword = async (pwd) => {
   const hashPwd = await hash(pwd, 10);
   return hashPwd;
 };
-const findByEmailAndPassword = async (account_no, password) => {
+const findByEmailAndPassword = async (email, password) => {
   let userObj = null;
   try {
     return new Promise(async function (resolve, reject) {
       const user = await knex("user").where({
-        account_no,
+        email,
       });
 
       if (!user[0]) return reject(new AppError("Incorrect credentials", 404));
@@ -36,20 +36,31 @@ module.exports = {
   async register(req, res, next) {
     try {
       //payload
-      const { password, email, name, account_no } = req.body;
+      const { password, email, name, account_no, role } = req.body;
 
       // hash password using bcrypt
       const hashedPassword = await hashPassword(password);
       console.log(hashedPassword);
       // create user
-      const newUser = await knex("user").insert({
-        password: hashedPassword,
-        email,
-        name,
-        account_no,
-      });
+      let newUser;
+      if (role === "customer") {
+        if (!account_no) throw new AppError("please provide account_no", 404);
+        newUser = await knex("user").insert({
+          password: hashedPassword,
+          email,
+          name,
+          account_no,
+          role,
+        });
+      } else {
+        newUser = await knex("user").insert({
+          password: hashedPassword,
+          email,
+          name,
+          role,
+        });
+      }
 
-      console.log(newUser);
       if (!newUser[0])
         throw new AppError("problem in registering please try ahain later");
       // console.log("new user token",newUser.token);
@@ -70,9 +81,9 @@ module.exports = {
   async login(req, res, next) {
     try {
       //payload
-      const { password, account_no } = req.body;
+      const { password, email } = req.body;
       // find email and password
-      const user = await findByEmailAndPassword(account_no, password);
+      const user = await findByEmailAndPassword(email, password);
       // generate token
       let token = generateToken(user[0].id);
 
@@ -82,6 +93,64 @@ module.exports = {
       next();
     } catch (err) {
       next(new AppError(err.message, err.statusCode));
+    }
+  },
+
+  async listTransaction(req, res, next) {
+    try {
+      console.log("transaction");
+      const listOfAllTransaction = await knex("account")
+        .where({
+          user_id: req.user.id,
+        })
+        .select("deposited", "withdraw", "account_id", "created_at");
+
+      if (!listOfAllTransaction.length)
+        throw new AppError("no transaction detail is found");
+
+      req.locals = new Response("success", 200, {
+        AllTransactions: listOfAllTransaction,
+      });
+      next();
+    } catch (err) {
+      next(new AppError(err.message, 400));
+    }
+  },
+
+  async listAllTransaction(req, res, next) {
+    try {
+      console.log("in");
+      const response = await knex("account")
+        .join("user", "user.id", "account.user_id")
+        .select("total_balance", "name", "email", "account_no");
+
+      if (!response.length) throw new AppError("no user found !");
+
+      req.locals = new Response("success", 200, { userdetails: response });
+      next();
+    } catch (err) {
+      next(new AppError(err.message, 400));
+    }
+  },
+
+  async getUserTransaction(req, res, next) {
+    try {
+      console.log("getUserTransaction");
+      const { id } = req.params;
+      console.log(id);
+      const userTransaction = await knex("account")
+        .where({
+          user_id: id,
+        })
+        .select("deposited", "withdraw", "account_id", "created_at");
+
+      if (!userTransaction.length)
+        throw new AppError("no Transacion found", 404);
+
+      req.locals = new Response("success", 200, { userTransaction });
+      next();
+    } catch (err) {
+      next(new AppError(err.message, err.statusCode || 400));
     }
   },
 };
