@@ -12,6 +12,8 @@ const {
   listTransaction,
   listAllTransaction,
   getUserTransaction,
+  logout,
+  getUser
 } = require("../Controllers/userController");
 
 router.post("/register", [
@@ -42,5 +44,12 @@ router.get("/get-user-transaction/:id", [
   getUserTransaction,
   Send,
 ]);
+router.get("/me", [
+  authenticate,
+  getUser,
+  Send,
+]);
+
+router.delete("/logout", [authenticate, logout, Send]);
 
 module.exports = router;

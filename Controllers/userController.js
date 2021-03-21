@@ -3,6 +3,7 @@ const { hash, compare } = require("bcryptjs");
 const { sign } = require("jsonwebtoken");
 const AppError = require("../utils/appErrorHandler");
 const Response = require("../utils/responseHandler");
+const moment = require("moment");
 
 const hashPassword = async (pwd) => {
   const hashPwd = await hash(pwd, 10);
@@ -29,7 +30,7 @@ const findByEmailAndPassword = async (email, password) => {
 };
 
 const generateToken = (id) => {
-  return sign({ id }, process.env.PRIVATE_KEY, { expiresIn: 60 * 10 });
+  return sign({ id }, process.env.PRIVATE_KEY, { expiresIn: 1000 * 60 * 10 });
 };
 
 module.exports = {
@@ -40,7 +41,6 @@ module.exports = {
 
       // hash password using bcrypt
       const hashedPassword = await hashPassword(password);
-      console.log(hashedPassword);
       // create user
       let newUser;
       if (role === "customer") {
@@ -72,7 +72,9 @@ module.exports = {
     } catch (err) {
       let message = "";
       if (err.code === "ER_DUP_ENTRY" && err.errno === 1062) {
-        message = "email is already registered!";
+        if (!err.sqlMessage.includes("account_no"))
+          message = "email is already registered!";
+        else message = "account no is already registered";
       }
       next(new AppError(message || err.message, err.statusCode || 500));
     }
@@ -88,7 +90,9 @@ module.exports = {
       let token = generateToken(user[0].id);
 
       req.locals = new Response(`Welcome ${user[0].name}`, 200, {
+        role: user[0].role,
         token: token,
+        balance: user[0].total_balance,
       });
       next();
     } catch (err) {
@@ -98,18 +102,31 @@ module.exports = {
 
   async listTransaction(req, res, next) {
     try {
-      console.log("transaction");
+      // let page = req.query.page;
+      // let limit = req.query.limit;
       const listOfAllTransaction = await knex("account")
         .where({
           user_id: req.user.id,
         })
-        .select("deposited", "withdraw", "account_id", "created_at");
+        .select("deposited", "withdraw", "account_id", "created_at", "id")
 
       if (!listOfAllTransaction.length)
         throw new AppError("no transaction detail is found");
 
+      const AllTransactions = listOfAllTransaction.map((transaction) => {
+        return {
+          id: transaction.id,
+          deposited: transaction.deposited,
+          withdraw: transaction.withdraw,
+          account_id: transaction.account_id,
+          created_at: moment(transaction.created_at)
+            .utcOffset(330)
+            .format("DD-MM-YYYY, hh:mm:ss"),
+        };
+      });
+
       req.locals = new Response("success", 200, {
-        AllTransactions: listOfAllTransaction,
+        AllTransactions,
       });
       next();
     } catch (err) {
@@ -119,10 +136,11 @@ module.exports = {
 
   async listAllTransaction(req, res, next) {
     try {
-      console.log("in");
-      const response = await knex("account")
-        .join("user", "user.id", "account.user_id")
-        .select("total_balance", "name", "email", "account_no");
+      const response = await knex("user")
+        .where({
+          role: "customer",
+        })
+        .select("total_balance", "name", "email", "account_no", "id");
 
       if (!response.length) throw new AppError("no user found !");
 
@@ -135,22 +153,68 @@ module.exports = {
 
   async getUserTransaction(req, res, next) {
     try {
-      console.log("getUserTransaction");
       const { id } = req.params;
-      console.log(id);
+      let page = req.query.page;
+      let limit = req.query.limit;
       const userTransaction = await knex("account")
         .where({
           user_id: id,
         })
-        .select("deposited", "withdraw", "account_id", "created_at");
+        .select("deposited", "withdraw", "account_id", "created_at", "id")
 
       if (!userTransaction.length)
         throw new AppError("no Transacion found", 404);
 
-      req.locals = new Response("success", 200, { userTransaction });
+      let transactions = userTransaction.map((transaction) => {
+        return {
+          deposited: transaction.deposited,
+          withdraw: transaction.withdraw,
+          account_id: transaction.account_id,
+          created_at: moment(transaction.created_at)
+            .utcOffset(330)
+            .format("DD-MM-YYYY, hh:mm:ss"),
+          id: transaction.id,
+        };
+      });
+
+      req.locals = new Response("success", 200, {
+        userTransaction: transactions,
+      });
       next();
     } catch (err) {
       next(new AppError(err.message, err.statusCode || 400));
+    }
+  },
+  async logout(req, res, next) {
+    try {
+      const currentUser = req.user.id;
+      condition = { id: currentUser };
+      const user = await knex("user").where(condition);
+      if (user) {
+        // user.token = null;
+
+        // await user.save({ validateBeforeSave: false });
+        req.locals = new Response("Thank you visit again", 200);
+        next();
+      }
+      throw new AppError("Session expired", 400);
+    } catch (err) {
+      next(new AppError(err.message, err.statusCode));
+    }
+  },
+  async getUser(req, res, next) {
+    try {
+      const userBalance = await knex("user")
+        .where({
+          id: req.user.id,
+        })
+        .select("total_balance");
+      req.locals = new Response("success", 200, {
+        balance: userBalance[0].total_balance,
+      });
+      next();
+    } catch (err) {
+      next(new AppError(err.message, err.statusCode));
     }
   },
 };
