@@ -15,7 +15,7 @@ module.exports = {
 
       totalBalance = currentBalance + deposited;
 
-      await knex.transaction(async function (t) {
+      return knex.transaction(async function (t) {
         try {
           const account = await knex("account").transacting(t).insert({
             deposited,
@@ -31,13 +31,16 @@ module.exports = {
             });
 
           t.commit();
+
           req.locals = new Response(
             `Your account credited with rs ${deposited}`,
             201
           );
+
           next();
         } catch (err) {
-          console.log(err);
+          console.log("in error");
+          console.log("err", err);
           t.rollback();
           throw new AppError("Error while crediting please try again", 400);
         }
@@ -60,7 +63,7 @@ module.exports = {
       totalBalance = currentBalance - withdraw;
       if (totalBalance < 0) throw new AppError("Insufficient Balance");
 
-      await knex.transaction(async function (t) {
+      knex.transaction(async function (t) {
         try {
           const account = await knex("account").transacting(t).insert({
             withdraw,
@@ -82,12 +85,9 @@ module.exports = {
           );
           next();
         } catch (err) {
-          console.log(err);
+          // console.log(err);
           t.rollback();
-          throw new AppError(
-            "Error while crediting please try again",
-            400
-          );
+          throw new AppError("Error while crediting please try again", 400);
         }
       });
     } catch (err) {

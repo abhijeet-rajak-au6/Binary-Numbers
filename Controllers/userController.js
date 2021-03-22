@@ -190,12 +190,13 @@ module.exports = {
       const currentUser = req.user.id;
       condition = { id: currentUser };
       const user = await knex("user").where(condition);
-      if (user) {
+     
+      if (user.length) {
         // user.token = null;
 
         // await user.save({ validateBeforeSave: false });
         req.locals = new Response("Thank you visit again", 200);
-        next();
+        return next();
       }
       throw new AppError("Session expired", 400);
     } catch (err) {
