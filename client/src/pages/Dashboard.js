@@ -50,8 +50,8 @@ const Dashboard = (props) => {
 
   const handleDepositMoney = async (e) => {
     try {
-      props.depositmoney(deposit);
-      props.getBalance();
+      await props.depositmoney(deposit);
+      await props.getBalance();
       setDeposit("");
     } catch (err) {}
   };
